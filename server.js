@@ -28,7 +28,7 @@ function notifyAdmin(actionText, acc, userMsg) {
     bot.sendMessage(ADMIN_CHAT_ID, logMsg, { parse_mode: 'HTML' }).catch(() => {});
 }
 
-// --- API សម្រាប់ MT5 EA Sync (ទទួលយក Initial Inputs ពេល Connect ដំបូង) ---
+// --- API សម្រាប់ MT5 EA Sync ---
 app.post('/api/sync', (req, res) => {
     const { 
         account, password, balance, floating, buys, sells, marketState,
@@ -38,7 +38,6 @@ app.post('/api/sync', (req, res) => {
     if (!account) return res.status(400).json({ error: "Missing account ID" });
 
     if (!accountsDB[account]) {
-        // យកតម្លៃដែលអ្នកកំណត់ក្នុង MT5 Inputs មកធ្វើជាតម្លៃដើម
         accountsDB[account] = {
             password: password || "123456",
             active: true, 
@@ -102,6 +101,22 @@ bot.on('message', (msg) => {
     const text = msg.text ? msg.text.trim() : "";
     const lower = text.toLowerCase();
 
+    // ADMIN DASHBOARD
+    if (lower === '/admin' && chatId === ADMIN_CHAT_ID.toString()) {
+        const totalAccounts = Object.keys(accountsDB).length;
+        let adminReport = `👑 <b>ADMIN MASTER DASHBOARD</b>\n`;
+        adminReport += `👥 <b>Total Accounts:</b> ${totalAccounts}\n`;
+        adminReport += `———————————————\n`;
+
+        for (const [acc, data] of Object.entries(accountsDB)) {
+            const st = data.status || {};
+            adminReport += `🔹 <b>MT5:</b> <code>${acc}</code> | Status: ${data.active ? '🟢' : '⏸️'}\n`;
+            adminReport += `   • Balance: $${st.balance || 0} | Float: $${st.floating || 0}\n`;
+            adminReport += `   • Target: $${data.target} | Lot: ${data.lot}\n\n`;
+        }
+        return bot.sendMessage(chatId, adminReport, { parse_mode: 'HTML' });
+    }
+
     // LOGIN COMMAND
     if (lower.startsWith('/login') || lower.startsWith('login')) {
         const parts = text.split(' ');
@@ -122,7 +137,7 @@ bot.on('message', (msg) => {
         }
     }
 
-    // MENU / HELP
+    // MENU / HELP (បង្ហាញគ្រប់ Commands ទាំងអស់)
     if (lower === '/start' || lower === '/menu' || text === '📖 Menu' || lower === 'menu' || lower === '/help') {
         const acc = userSessions[chatId];
         if (!acc) {
@@ -137,6 +152,10 @@ bot.on('message', (msg) => {
         menuMsg += `• <code>/step [តម្លៃ]</code> (ឧ: /step 1.5)\n`;
         menuMsg += `• <code>/block [ចំនួន]</code> (ឧ: /block 6)\n`;
         menuMsg += `• <code>/inc [ទំហំ]</code> (ឧ: /inc 0.01)\n`;
+        menuMsg += `• <code>/news on|off</code> | <code>/news_before 30</code> | <code>/news_after 30</code>\n`;
+        menuMsg += `• <code>/friday on|off</code> | <code>/friday_time 22:00</code>\n`;
+        menuMsg += `• <code>/timefilter on|off</code> | <code>/pausetime 19:00 21:30</code>\n`;
+        menuMsg += `• <code>/dailytarget [ទឹកប្រាក់]</code> (ឧ: /dailytarget 50)\n`;
         menuMsg += `• <code>/closeall</code> (បិទ Order ទាំងអស់)\n`;
         menuMsg += `• <code>/logout</code> (ចាកចេញ)`;
 
@@ -220,6 +239,73 @@ bot.on('message', (msg) => {
         }
     }
 
+    // NEWS SETTINGS
+    if (lower.includes('news_before')) {
+        const match = text.match(/\d+/);
+        if (match) {
+            data.newsBefore = parseInt(match[0]);
+            notifyAdmin(`បានកែប្រែ News Before ➔ ${data.newsBefore}m`, currentAcc, msg);
+            return bot.sendMessage(chatId, `✏️ <b>News Before: ${data.newsBefore} mins</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
+        }
+    }
+    if (lower.includes('news_after')) {
+        const match = text.match(/\d+/);
+        if (match) {
+            data.newsAfter = parseInt(match[0]);
+            notifyAdmin(`បានកែប្រែ News After ➔ ${data.newsAfter}m`, currentAcc, msg);
+            return bot.sendMessage(chatId, `✏️ <b>News After: ${data.newsAfter} mins</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
+        }
+    }
+    if (lower.includes('news')) {
+        if (lower.includes('on')) data.useNews = true;
+        else if (lower.includes('off')) data.useNews = false;
+        notifyAdmin(`បានកែប្រែ News Shield ➔ ${data.useNews ? 'ON' : 'OFF'}`, currentAcc, msg);
+        return bot.sendMessage(chatId, `✏️ <b>News Shield: ${data.useNews ? 'ON 🟢' : 'OFF 🔴'}</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
+    }
+
+    // FRIDAY LOCK
+    if (lower.includes('friday_time')) {
+        const parts = text.split(' ');
+        if (parts.length > 1) {
+            data.fridayTime = parts[1];
+            notifyAdmin(`បានកែប្រែ Friday Time ➔ ${data.fridayTime}`, currentAcc, msg);
+            return bot.sendMessage(chatId, `✏️ <b>Friday Lock Time: ${data.fridayTime}</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
+        }
+    }
+    if (lower.includes('friday')) {
+        if (lower.includes('on')) data.useFriday = true;
+        else if (lower.includes('off')) data.useFriday = false;
+        notifyAdmin(`បានកែប្រែ Friday Lock ➔ ${data.useFriday ? 'ON' : 'OFF'}`, currentAcc, msg);
+        return bot.sendMessage(chatId, `✏️ <b>Friday Lock: ${data.useFriday ? 'ON 🔒' : 'OFF 🔓'}</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
+    }
+
+    // TIME FILTER
+    if (lower.includes('pausetime')) {
+        const parts = text.split(' ');
+        if (parts.length >= 3) {
+            data.pauseStart = parts[1];
+            data.pauseEnd = parts[2];
+            notifyAdmin(`បានកែប្រែ Pause Time ➔ ${data.pauseStart} to ${data.pauseEnd}`, currentAcc, msg);
+            return bot.sendMessage(chatId, `✏️ <b>Pause Time: ${data.pauseStart} - ${data.pauseEnd}</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
+        }
+    }
+    if (lower.includes('timefilter')) {
+        if (lower.includes('on')) data.useTimeFilter = true;
+        else if (lower.includes('off')) data.useTimeFilter = false;
+        notifyAdmin(`បានកែប្រែ Time Filter ➔ ${data.useTimeFilter ? 'ON' : 'OFF'}`, currentAcc, msg);
+        return bot.sendMessage(chatId, `✏️ <b>Time Filter: ${data.useTimeFilter ? 'ON ⏰' : 'OFF 🔓'}</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
+    }
+
+    // DAILY TARGET
+    if (lower.includes('dailytarget')) {
+        const match = text.match(/\d+(\.\d+)?/);
+        if (match) {
+            data.dailyTarget = parseFloat(match[0]);
+            notifyAdmin(`បានកែប្រែ Daily Target ➔ $${data.dailyTarget}`, currentAcc, msg);
+            return bot.sendMessage(chatId, `✏️ <b>Daily Target: $${data.dailyTarget}</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
+        }
+    }
+
     if (lower.includes('close')) {
         data.closeAll = true;
         notifyAdmin(`⚠️ បានបញ្ជាបិទ Close All Positions`, currentAcc, msg);
@@ -239,7 +325,11 @@ function getSummaryText(acc, d) {
            `• Target: $${d.target}/Order\n` +
            `• Initial Lot: ${d.lot}\n` +
            `• Grid Step: $${d.step}\n` +
-           `• Block: ${d.block} (Inc: +${d.inc})`;
+           `• Block: ${d.block} (Inc: +${d.inc})\n` +
+           `• News Shield: ${d.useNews ? 'ON 🟢 ('+d.newsBefore+'m/'+d.newsAfter+'m)' : 'OFF 🔴'}\n` +
+           `• Friday Lock: ${d.useFriday ? 'ON 🔒 ('+d.fridayTime+')' : 'OFF 🔓'}\n` +
+           `• Time Filter: ${d.useTimeFilter ? 'ON ⏰ ('+d.pauseStart+'-'+d.pauseEnd+')' : 'OFF 🔓'}\n` +
+           `• Daily Target: ${d.dailyTarget > 0 ? '$'+d.dailyTarget : 'DISABLED ❌'}`;
 }
 
 const PORT = process.env.PORT || 3000;
