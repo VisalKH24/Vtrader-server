@@ -4,7 +4,6 @@ const TelegramBot = require('node-telegram-bot-api');
 const app = express();
 app.use(express.json());
 
-// 🔑 Bot Token និង Admin Chat ID
 const BOT_TOKEN = process.env.BOT_TOKEN || "YOUR_TELEGRAM_BOT_TOKEN_HERE";
 const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID || "YOUR_PERSONAL_CHAT_ID";
 
@@ -13,7 +12,6 @@ const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 const accountsDB = {}; 
 const userSessions = {}; 
 
-// 📢 មុខងារផ្ញើសារដំណឹងទៅកាន់ Admin ផ្ទាល់
 function notifyAdmin(actionText, acc, userMsg) {
     if (!ADMIN_CHAT_ID || ADMIN_CHAT_ID === "YOUR_PERSONAL_CHAT_ID") return;
     
@@ -30,7 +28,7 @@ function notifyAdmin(actionText, acc, userMsg) {
     bot.sendMessage(ADMIN_CHAT_ID, logMsg, { parse_mode: 'HTML' }).catch(() => {});
 }
 
-// --- API សម្រាប់ MT5 EA ធ្វើសមកាលកម្ម (Sync) ---
+// --- API សម្រាប់ MT5 EA Sync ទិន្នន័យគ្រប់ Settings ---
 app.post('/api/sync', (req, res) => {
     const { account, password, balance, floating, buys, sells, marketState } = req.body;
     if (!account) return res.status(400).json({ error: "Missing account ID" });
@@ -38,7 +36,11 @@ app.post('/api/sync', (req, res) => {
     if (!accountsDB[account]) {
         accountsDB[account] = {
             password: password || "123456",
-            active: true, target: 25.0, lot: 0.03, step: 1.0, block: 6, inc: 0.01, closeAll: false, newsActive: true,
+            active: true, target: 25.0, lot: 0.03, step: 1.0, block: 6, inc: 0.01,
+            useNews: true, newsBefore: 30, newsAfter: 30,
+            useFriday: true, fridayTime: "22:00",
+            useTimeFilter: false, pauseStart: "19:00", pauseEnd: "21:30",
+            dailyTarget: 0.0, closeAll: false,
             status: { balance, floating, buys, sells, marketState }
         };
     } else {
@@ -54,8 +56,16 @@ app.post('/api/sync', (req, res) => {
         step: current.step,
         block: current.block,
         inc: current.inc,
-        closeAll: current.closeAll,
-        newsActive: current.newsActive
+        useNews: current.useNews,
+        newsBefore: current.newsBefore,
+        newsAfter: current.newsAfter,
+        useFriday: current.useFriday,
+        fridayTime: current.fridayTime,
+        useTimeFilter: current.useTimeFilter,
+        pauseStart: current.pauseStart,
+        pauseEnd: current.pauseEnd,
+        dailyTarget: current.dailyTarget,
+        closeAll: current.closeAll
     });
 
     if (current.closeAll) current.closeAll = false;
@@ -82,28 +92,27 @@ bot.on('message', (msg) => {
     const text = msg.text ? msg.text.trim() : "";
     const lower = text.toLowerCase();
 
-    // 0. ADMIN DASHBOARD COMMAND
+    // ADMIN DASHBOARD
     if (lower === '/admin' && chatId === ADMIN_CHAT_ID.toString()) {
         const totalAccounts = Object.keys(accountsDB).length;
         let adminReport = `👑 <b>ADMIN MASTER DASHBOARD</b>\n`;
-        adminReport += `👥 <b>Total Active Accounts:</b> ${totalAccounts}\n`;
+        adminReport += `👥 <b>Total Accounts:</b> ${totalAccounts}\n`;
         adminReport += `———————————————\n`;
 
         for (const [acc, data] of Object.entries(accountsDB)) {
             const st = data.status || {};
-            adminReport += `🔹 <b>MT5:</b> <code>${acc}</code> (Pass: <code>${data.password}</code>)\n`;
-            adminReport += `   • Status: ${data.active ? '🟢 RUNNING' : '⏸️ PAUSED'}\n`;
+            adminReport += `🔹 <b>MT5:</b> <code>${acc}</code> | Status: ${data.active ? '🟢' : '⏸️'}\n`;
             adminReport += `   • Balance: $${st.balance || 0} | Float: $${st.floating || 0}\n`;
-            adminReport += `   • Target: $${data.target} | Lot: ${data.lot} | Step: $${data.step}\n\n`;
+            adminReport += `   • Target: $${data.target} | Lot: ${data.lot}\n\n`;
         }
         return bot.sendMessage(chatId, adminReport, { parse_mode: 'HTML' });
     }
 
-    // 1. LOGIN COMMAND
+    // LOGIN COMMAND
     if (lower.startsWith('/login') || lower.startsWith('login')) {
         const parts = text.split(' ');
         if (parts.length < 3) {
-            return bot.sendMessage(chatId, "⚠️ <b>ទម្រង់ Login:</b> <code>/login [លេខ MT5] [Password]</code>\nឧទាហរណ៍៖ <code>/login 50110562 123456</code>", { parse_mode: 'HTML' });
+            return bot.sendMessage(chatId, "⚠️ <b>ទម្រង់ Login:</b> <code>/login [លេខ MT5] [Password]</code>", { parse_mode: 'HTML' });
         }
         const acc = parts[1];
         const pass = parts[2];
@@ -111,42 +120,42 @@ bot.on('message', (msg) => {
         if (accountsDB[acc] && accountsDB[acc].password === pass) {
             userSessions[chatId] = acc;
             notifyAdmin(`បាន Login ចូលគ្រប់គ្រង Account ជោគជ័យ`, acc, msg);
-            return bot.sendMessage(chatId, `🔓 <b>Login ជោគជ័យទៅកាន់ Account: ${acc}!</b>\n\nអ្នកអាចប្រើប្រាស់ប៊ូតុង ឬពាក្យបញ្ជាខាងក្រោមដើម្បីបញ្ជា EA។`, { parse_mode: 'HTML', ...keyboardMarkup });
+            return bot.sendMessage(chatId, `🔓 <b>Login ជោគជ័យទៅកាន់ Account: ${acc}!</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
         } else if (!accountsDB[acc]) {
             accountsDB[acc] = {
-                password: pass, active: true, target: 25.0, lot: 0.03, step: 1.0, block: 6, inc: 0.01, closeAll: false, newsActive: true, status: {}
+                password: pass, active: true, target: 25.0, lot: 0.03, step: 1.0, block: 6, inc: 0.01,
+                useNews: true, newsBefore: 30, newsAfter: 30, useFriday: true, fridayTime: "22:00",
+                useTimeFilter: false, pauseStart: "19:00", pauseEnd: "21:30", dailyTarget: 0.0, closeAll: false, status: {}
             };
             userSessions[chatId] = acc;
             notifyAdmin(`បានចុះឈ្មោះ និង Login ដំបូង`, acc, msg);
             return bot.sendMessage(chatId, `🔓 <b>ភ្ជាប់ជោគជ័យទៅកាន់ Account: ${acc}!</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
         } else {
-            return bot.sendMessage(chatId, "❌ <b>Password មិនត្រឹមត្រូវ!</b> សូមព្យាយាមម្តងទៀត។", { parse_mode: 'HTML' });
+            return bot.sendMessage(chatId, "❌ <b>Password មិនត្រឹមត្រូវ!</b>", { parse_mode: 'HTML' });
         }
     }
 
-    // 2. MENU / START
+    // MENU / HELP
     if (lower === '/start' || lower === '/menu' || text === '📖 Menu' || lower === 'menu' || lower === '/help') {
         const acc = userSessions[chatId];
         if (!acc) {
-            return bot.sendMessage(chatId, "🤖 <b>សូមស្វាគមន៍មកកាន់ VTrader Central Bot!</b>\n\n👉 សូម Login ជាមុនសិន៖\n<code>/login [លេខ MT5] [Password]</code>", { parse_mode: 'HTML' });
+            return bot.sendMessage(chatId, "🤖 <b>សូមស្វាគមន៍!</b>\n\n👉 សូម Login៖ <code>/login [លេខ MT5] [Password]</code>", { parse_mode: 'HTML' });
         }
 
         let menuMsg = `🎛️ <b>VTRADER CONTROL PANEL (${acc})</b>\n`;
         menuMsg += `———————————————\n`;
-        menuMsg += `ចុចលើ <b>Buttons</b> ខាងក្រោម ឬវាយពាក្យបញ្ជាផ្ទាល់៖\n\n`;
-        menuMsg += `🔹 <b>គ្រប់គ្រង EA:</b>\n`;
-        menuMsg += `• <code>/start_ea</code> — បើកដំណើរការ EA 🟢\n`;
-        menuMsg += `• <code>/pause_ea</code> — ផ្អាកដំណើរការ EA ⏸️\n`;
-        menuMsg += `• <code>/status</code> — ឆែកមើលស្ថានភាពបច្ចុប្បន្ន\n`;
-        menuMsg += `• <code>/closeall</code> — បញ្ជាបិទ Positions ទាំងអស់ 🛑\n\n`;
-        menuMsg += `🔹 <b>កែប្រែ Settings:</b>\n`;
-        menuMsg += `• <code>/target [តម្លៃ]</code> — កែ Target USD (ឧ: <code>/target 35</code>)\n`;
-        menuMsg += `• <code>/lot [ទំហំ]</code> — កែ Initial Lot (ឧ: <code>/lot 0.05</code>)\n`;
-        menuMsg += `• <code>/step [តម្លៃ]</code> — កែ Grid Step USD (ឧ: <code>/step 1.5</code>)\n`;
-        menuMsg += `• <code>/block [ចំនួន]</code> — កែ Block Size (ឧ: <code>/block 4</code>)\n`;
-        menuMsg += `• <code>/inc [ទំហំ]</code> — កែ Lot Increment (ឧ: <code>/inc 0.02</code>)\n\n`;
-        menuMsg += `🔹 <b>ផ្សេងៗ:</b>\n`;
-        menuMsg += `• <code>/logout</code> — ចាកចេញពីគណនី 🔒`;
+        menuMsg += `• <code>/start_ea</code> | <code>/pause_ea</code>\n`;
+        menuMsg += `• <code>/target [តម្លៃ]</code> (ឧ: /target 35)\n`;
+        menuMsg += `• <code>/lot [ទំហំ]</code> (ឧ: /lot 0.05)\n`;
+        menuMsg += `• <code>/step [តម្លៃ]</code> (ឧ: /step 1.5)\n`;
+        menuMsg += `• <code>/block [ចំនួន]</code> (ឧ: /block 6)\n`;
+        menuMsg += `• <code>/inc [ទំហំ]</code> (ឧ: /inc 0.01)\n`;
+        menuMsg += `• <code>/news on|off</code> | <code>/news_before 30</code> | <code>/news_after 30</code>\n`;
+        menuMsg += `• <code>/friday on|off</code> | <code>/friday_time 22:00</code>\n`;
+        menuMsg += `• <code>/timefilter on|off</code> | <code>/pausetime 19:00 21:30</code>\n`;
+        menuMsg += `• <code>/dailytarget [ទឹកប្រាក់]</code> (ឧ: /dailytarget 50)\n`;
+        menuMsg += `• <code>/closeall</code> (បិទ Order ទាំងអស់)\n`;
+        menuMsg += `• <code>/logout</code> (ចាកចេញ)`;
 
         return bot.sendMessage(chatId, menuMsg, { parse_mode: 'HTML', ...keyboardMarkup });
     }
@@ -158,7 +167,6 @@ bot.on('message', (msg) => {
 
     const data = accountsDB[currentAcc];
 
-    // 3. STATUS
     if (lower.includes('status')) {
         const st = data.status || {};
         let report = `📊 <b>VTrader Status (${currentAcc})</b>\n`;
@@ -168,86 +176,144 @@ bot.on('message', (msg) => {
         return bot.sendMessage(chatId, report, { parse_mode: 'HTML', ...keyboardMarkup });
     }
 
-    // 4. SETTINGS
     if (lower.includes('setting')) {
         return bot.sendMessage(chatId, getSummaryText(currentAcc, data), { parse_mode: 'HTML', ...keyboardMarkup });
     }
 
-    // 5. START / PAUSE EA
     if (lower.includes('start ea') || lower === '/start_ea' || lower === '/ea on') {
         data.active = true;
         notifyAdmin(`បានបើកដំណើរការ EA (Start EA 🟢)`, currentAcc, msg);
-        return bot.sendMessage(chatId, `🟢 <b>EA Status: ACTIVE (${currentAcc})</b>\n\n${getSummaryText(currentAcc, data)}`, { parse_mode: 'HTML', ...keyboardMarkup });
+        return bot.sendMessage(chatId, `🟢 <b>EA Status: ACTIVE (${currentAcc})</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
     }
     if (lower.includes('pause ea') || lower === '/pause_ea' || lower === '/ea off') {
         data.active = false;
         notifyAdmin(`បានផ្អាកដំណើរការ EA (Pause EA ⏸️)`, currentAcc, msg);
-        return bot.sendMessage(chatId, `⏸️ <b>EA Status: PAUSED (${currentAcc})</b>\n\n${getSummaryText(currentAcc, data)}`, { parse_mode: 'HTML', ...keyboardMarkup });
+        return bot.sendMessage(chatId, `⏸️ <b>EA Status: PAUSED (${currentAcc})</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
     }
 
-    // 6. TARGET
     if (lower.includes('target')) {
         const match = text.match(/target\s*(\d+(\.\d+)?)/i) || text.match(/\d+(\.\d+)?/);
         if (match) {
             const oldT = data.target;
             data.target = parseFloat(match[1] || match[0]);
             notifyAdmin(`បានកែប្រែ Target ពី $${oldT} ➔ $${data.target}`, currentAcc, msg);
-            return bot.sendMessage(chatId, `✏️ <b>Basket Target: $${data.target}</b>\n\n${getSummaryText(currentAcc, data)}`, { parse_mode: 'HTML', ...keyboardMarkup });
+            return bot.sendMessage(chatId, `✏️ <b>Basket Target: $${data.target}</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
         }
     }
 
-    // 7. LOT
     if (lower.includes('lot')) {
         const match = text.match(/lot\s*(\d+(\.\d+)?)/i) || text.match(/\d+(\.\d+)?/);
         if (match) {
             const oldL = data.lot;
             data.lot = parseFloat(match[1] || match[0]);
             notifyAdmin(`បានកែប្រែ Initial Lot ពី ${oldL} ➔ ${data.lot}`, currentAcc, msg);
-            return bot.sendMessage(chatId, `✏️ <b>Initial Lot: ${data.lot}</b>\n\n${getSummaryText(currentAcc, data)}`, { parse_mode: 'HTML', ...keyboardMarkup });
+            return bot.sendMessage(chatId, `✏️ <b>Initial Lot: ${data.lot}</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
         }
     }
 
-    // 8. STEP
     if (lower.includes('step')) {
         const match = text.match(/step\s*(\d+(\.\d+)?)/i) || text.match(/\d+(\.\d+)?/);
         if (match) {
             const oldS = data.step;
             data.step = parseFloat(match[1] || match[0]);
             notifyAdmin(`បានកែប្រែ Grid Step ពី $${oldS} ➔ $${data.step}`, currentAcc, msg);
-            return bot.sendMessage(chatId, `✏️ <b>Grid Step: $${data.step}</b>\n\n${getSummaryText(currentAcc, data)}`, { parse_mode: 'HTML', ...keyboardMarkup });
+            return bot.sendMessage(chatId, `✏️ <b>Grid Step: $${data.step}</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
         }
     }
 
-    // 9. BLOCK SIZE
     if (lower.includes('block')) {
         const match = text.match(/block\s*(\d+)/i) || text.match(/\d+/);
         if (match) {
             const oldB = data.block;
             data.block = parseInt(match[1] || match[0]);
             notifyAdmin(`បានកែប្រែ Block Size ពី ${oldB} ➔ ${data.block}`, currentAcc, msg);
-            return bot.sendMessage(chatId, `✏️ <b>Block Size: ${data.block} Orders</b>\n\n${getSummaryText(currentAcc, data)}`, { parse_mode: 'HTML', ...keyboardMarkup });
+            return bot.sendMessage(chatId, `✏️ <b>Block Size: ${data.block} Orders</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
         }
     }
 
-    // 10. BLOCK LOT INCREMENT
     if (lower.includes('inc')) {
         const match = text.match(/inc\s*(\d+(\.\d+)?)/i) || text.match(/\d+(\.\d+)?/);
         if (match) {
             const oldI = data.inc;
             data.inc = parseFloat(match[1] || match[0]);
             notifyAdmin(`បានកែប្រែ Lot Increment ពី +${oldI} ➔ +${data.inc}`, currentAcc, msg);
-            return bot.sendMessage(chatId, `✏️ <b>Lot Increment: +${data.inc}</b>\n\n${getSummaryText(currentAcc, data)}`, { parse_mode: 'HTML', ...keyboardMarkup });
+            return bot.sendMessage(chatId, `✏️ <b>Lot Increment: +${data.inc}</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
         }
     }
 
-    // 11. CLOSE ALL
+    // NEWS SETTINGS
+    if (lower.includes('news_before')) {
+        const match = text.match(/\d+/);
+        if (match) {
+            data.newsBefore = parseInt(match[0]);
+            notifyAdmin(`បានកែប្រែ News Before ➔ ${data.newsBefore}m`, currentAcc, msg);
+            return bot.sendMessage(chatId, `✏️ <b>News Before: ${data.newsBefore} mins</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
+        }
+    }
+    if (lower.includes('news_after')) {
+        const match = text.match(/\d+/);
+        if (match) {
+            data.newsAfter = parseInt(match[0]);
+            notifyAdmin(`បានកែប្រែ News After ➔ ${data.newsAfter}m`, currentAcc, msg);
+            return bot.sendMessage(chatId, `✏️ <b>News After: ${data.newsAfter} mins</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
+        }
+    }
+    if (lower.includes('news')) {
+        if (lower.includes('on')) data.useNews = true;
+        else if (lower.includes('off')) data.useNews = false;
+        notifyAdmin(`បានកែប្រែ News Shield ➔ ${data.useNews ? 'ON' : 'OFF'}`, currentAcc, msg);
+        return bot.sendMessage(chatId, `✏️ <b>News Shield: ${data.useNews ? 'ON 🟢' : 'OFF 🔴'}</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
+    }
+
+    // FRIDAY LOCK
+    if (lower.includes('friday_time')) {
+        const parts = text.split(' ');
+        if (parts.length > 1) {
+            data.fridayTime = parts[1];
+            notifyAdmin(`បានកែប្រែ Friday Time ➔ ${data.fridayTime}`, currentAcc, msg);
+            return bot.sendMessage(chatId, `✏️ <b>Friday Lock Time: ${data.fridayTime}</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
+        }
+    }
+    if (lower.includes('friday')) {
+        if (lower.includes('on')) data.useFriday = true;
+        else if (lower.includes('off')) data.useFriday = false;
+        notifyAdmin(`បានកែប្រែ Friday Lock ➔ ${data.useFriday ? 'ON' : 'OFF'}`, currentAcc, msg);
+        return bot.sendMessage(chatId, `✏️ <b>Friday Lock: ${data.useFriday ? 'ON 🔒' : 'OFF 🔓'}</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
+    }
+
+    // TIME FILTER
+    if (lower.includes('pausetime')) {
+        const parts = text.split(' ');
+        if (parts.length >= 3) {
+            data.pauseStart = parts[1];
+            data.pauseEnd = parts[2];
+            notifyAdmin(`បានកែប្រែ Pause Time ➔ ${data.pauseStart} to ${data.pauseEnd}`, currentAcc, msg);
+            return bot.sendMessage(chatId, `✏️ <b>Pause Time: ${data.pauseStart} - ${data.pauseEnd}</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
+        }
+    }
+    if (lower.includes('timefilter')) {
+        if (lower.includes('on')) data.useTimeFilter = true;
+        else if (lower.includes('off')) data.useTimeFilter = false;
+        notifyAdmin(`បានកែប្រែ Time Filter ➔ ${data.useTimeFilter ? 'ON' : 'OFF'}`, currentAcc, msg);
+        return bot.sendMessage(chatId, `✏️ <b>Time Filter: ${data.useTimeFilter ? 'ON ⏰' : 'OFF 🔓'}</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
+    }
+
+    // DAILY TARGET
+    if (lower.includes('dailytarget')) {
+        const match = text.match(/\d+(\.\d+)?/);
+        if (match) {
+            data.dailyTarget = parseFloat(match[0]);
+            notifyAdmin(`បានកែប្រែ Daily Target ➔ $${data.dailyTarget}`, currentAcc, msg);
+            return bot.sendMessage(chatId, `✏️ <b>Daily Target: $${data.dailyTarget}</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
+        }
+    }
+
     if (lower.includes('close')) {
         data.closeAll = true;
         notifyAdmin(`⚠️ បានបញ្ជាបិទ Close All Positions`, currentAcc, msg);
         return bot.sendMessage(chatId, `🛑 <b>បានបញ្ជាបិទ Positions ទាំងអស់លើ Account ${currentAcc}!</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
     }
 
-    // 12. LOGOUT
     if (lower === '/logout') {
         notifyAdmin(`បាន Logout ចេញពីប្រព័ន្ធ`, currentAcc, msg);
         delete userSessions[chatId];
@@ -261,7 +327,11 @@ function getSummaryText(acc, d) {
            `• Target: $${d.target}/Order\n` +
            `• Initial Lot: ${d.lot}\n` +
            `• Grid Step: $${d.step}\n` +
-           `• Block: ${d.block} (Inc: +${d.inc})`;
+           `• Block: ${d.block} (Inc: +${d.inc})\n` +
+           `• News Shield: ${d.useNews ? 'ON 🟢 ('+d.newsBefore+'m/'+d.newsAfter+'m)' : 'OFF 🔴'}\n` +
+           `• Friday Lock: ${d.useFriday ? 'ON 🔒 ('+d.fridayTime+')' : 'OFF 🔓'}\n` +
+           `• Time Filter: ${d.useTimeFilter ? 'ON ⏰ ('+d.pauseStart+'-'+d.pauseEnd+')' : 'OFF 🔓'}\n` +
+           `• Daily Target: ${d.dailyTarget > 0 ? '$'+d.dailyTarget : 'DISABLED ❌'}`;
 }
 
 const PORT = process.env.PORT || 3000;
