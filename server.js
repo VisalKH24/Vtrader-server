@@ -137,7 +137,7 @@ bot.on('message', (msg) => {
         }
     }
 
-    // MENU / HELP (បង្ហាញគ្រប់ Commands ទាំងអស់)
+    // MENU / HELP (បង្ហាញការពន្យល់លម្អិត)
     if (lower === '/start' || lower === '/menu' || text === '📖 Menu' || lower === 'menu' || lower === '/help') {
         const acc = userSessions[chatId];
         if (!acc) {
@@ -145,19 +145,29 @@ bot.on('message', (msg) => {
         }
 
         let menuMsg = `🎛️ <b>VTRADER CONTROL PANEL (${acc})</b>\n`;
-        menuMsg += `———————————————\n`;
-        menuMsg += `• <code>/start_ea</code> | <code>/pause_ea</code>\n`;
-        menuMsg += `• <code>/target [តម្លៃ]</code> (ឧ: /target 35)\n`;
-        menuMsg += `• <code>/lot [ទំហំ]</code> (ឧ: /lot 0.05)\n`;
-        menuMsg += `• <code>/step [តម្លៃ]</code> (ឧ: /step 1.5)\n`;
-        menuMsg += `• <code>/block [ចំនួន]</code> (ឧ: /block 6)\n`;
-        menuMsg += `• <code>/inc [ទំហំ]</code> (ឧ: /inc 0.01)\n`;
-        menuMsg += `• <code>/news on|off</code> | <code>/news_before 30</code> | <code>/news_after 30</code>\n`;
-        menuMsg += `• <code>/friday on|off</code> | <code>/friday_time 22:00</code>\n`;
-        menuMsg += `• <code>/timefilter on|off</code> | <code>/pausetime 19:00 21:30</code>\n`;
-        menuMsg += `• <code>/dailytarget [ទឹកប្រាក់]</code> (ឧ: /dailytarget 50)\n`;
-        menuMsg += `• <code>/closeall</code> (បិទ Order ទាំងអស់)\n`;
-        menuMsg += `• <code>/logout</code> (ចាកចេញ)`;
+        menuMsg += `———————————————\n\n`;
+        menuMsg += `🟢 <b>ការគ្រប់គ្រងទូទៅ:</b>\n`;
+        menuMsg += `• <code>/start_ea</code> — បើកដំណើរការ EA ឡើងវិញ\n`;
+        menuMsg += `• <code>/pause_ea</code> — ផ្អាកបើក Order ថ្មី (ដោះ Order ចាស់ធម្មតា)\n`;
+        menuMsg += `• <code>/status</code> — ឆែកមើលស្ថានភាពគណនី\n\n`;
+        menuMsg += `⚙️ <b>ការកែប្រែ Settings:</b>\n`;
+        menuMsg += `• <code>/target [តម្លៃ]</code> — កែ Basket Target (ឧ: <code>/target 35</code>)\n`;
+        menuMsg += `• <code>/lot [ទំហំ]</code> — កែ Initial Lot (ឧ: <code>/lot 0.05</code>)\n`;
+        menuMsg += `• <code>/step [តម្លៃ]</code> — កែ Grid Step (ឧ: <code>/step 1.5</code>)\n`;
+        menuMsg += `• <code>/block [ចំនួន]</code> — កែ Block Size (ឧ: <code>/block 6</code>)\n`;
+        menuMsg += `• <code>/inc [ទំហំ]</code> — កែ Lot Increment (ឧ: <code>/inc 0.01</code>)\n\n`;
+        menuMsg += `🛡️ <b>ប្រព័ន្ធការពារ (Shields):</b>\n`;
+        menuMsg += `• <code>/news on|off</code> — បើក/បិទ News Filter\n`;
+        menuMsg += `• <code>/news_before [នាទី]</code> — ផ្អាកមុនព័ត៌មាន (ឧ: <code>/news_before 30</code>)\n`;
+        menuMsg += `• <code>/news_after [នាទី]</code> — ផ្អាកក្រោយព័ត៌មាន (ឧ: <code>/news_after 30</code>)\n`;
+        menuMsg += `• <code>/friday on|off</code> — បើក/បិទ Friday Lock\n`;
+        menuMsg += `• <code>/friday_time [ម៉ោង]</code> — កំណត់ម៉ោងបិទថ្ងៃសុក្រ (ឧ: <code>/friday_time 22:00</code>)\n`;
+        menuMsg += `• <code>/timefilter on|off</code> — បើក/បិទ Time Filter\n`;
+        menuMsg += `• <code>/pausetime [ចាប់ផ្តើម] [បញ្ចប់]</code> — កំណត់ម៉ោងផ្អាក (ឧ: <code>/pausetime 19:00 21:30</code>)\n`;
+        menuMsg += `• <code>/dailytarget [ទឹកប្រាក់]</code> — កំណត់គោលដៅចំណេញប្រចាំថ្ងៃ (ឧ: <code>/dailytarget 50</code>)\n\n`;
+        menuMsg += `🛑 <b>ផ្សេងៗ:</b>\n`;
+        menuMsg += `• <code>/closeall</code> — បិទ Order ទាំងអស់បន្ទាន់\n`;
+        menuMsg += `• <code>/logout</code> — ចាកចេញពីប្រព័ន្ធ`;
 
         return bot.sendMessage(chatId, menuMsg, { parse_mode: 'HTML', ...keyboardMarkup });
     }
