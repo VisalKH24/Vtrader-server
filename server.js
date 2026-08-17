@@ -40,14 +40,14 @@ app.post('/api/sync', (req, res) => {
         accountsDB[account] = {
             password: password || "123456",
             active: true, 
-            target: initialTarget !== undefined ? initialTarget : 4.0, // 🎯 កំណត់ Target ដើម 4$
-            lot: initialLot !== undefined ? initialLot : 0.03, 
-            step: initialStep !== undefined ? initialStep : 1.0, 
-            block: initialBlock !== undefined ? initialBlock : 6, 
+            target: initialTarget !== undefined ? initialTarget : 4.0, // Default $4/Order
+            lot: initialLot !== undefined ? initialLot : 0.02, 
+            step: initialStep !== undefined ? initialStep : 0.4, 
+            block: initialBlock !== undefined ? initialBlock : 15, 
             inc: initialInc !== undefined ? initialInc : 0.01,
             useNews: true, newsBefore: 30, newsAfter: 30,
-            useFriday: true, fridayTime: "22:00",
-            useTimeFilter: false, pauseStart: "19:00", pauseEnd: "21:30",
+            useFriday: true, fridayTime: "19:00",
+            useTimeFilter: true, pauseStart: "19:00", pauseEnd: "21:30",
             dailyTarget: 0.0, closeAll: false,
             status: { balance, floating, buys, sells, marketState }
         };
@@ -105,7 +105,7 @@ bot.on('message', (msg) => {
         let adminReport = `👑 <b>ADMIN MASTER DASHBOARD</b>\n👥 <b>Total Accounts:</b> ${totalAccounts}\n`;
         for (const [acc, data] of Object.entries(accountsDB)) {
             const st = data.status || {};
-            adminReport += `🔹 <b>MT5:</b> <code>${acc}</code> | Target: $${data.target}\n`;
+            adminReport += `🔹 <b>MT5:</b> <code>${acc}</code> | Status: ${data.active ? '🟢' : '⏸️'} | Target: $${data.target}\n`;
         }
         return bot.sendMessage(chatId, adminReport, { parse_mode: 'HTML' });
     }
@@ -118,6 +118,7 @@ bot.on('message', (msg) => {
 
         if (accountsDB[acc] && accountsDB[acc].password === pass) {
             userSessions[chatId] = acc;
+            notifyAdmin(`បាន Login ចូលគ្រប់គ្រង Account ជោគជ័យ`, acc, msg);
             return bot.sendMessage(chatId, `🔓 <b>Login ជោគជ័យទៅកាន់ Account: ${acc}!</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
         } else if (!accountsDB[acc]) {
             return bot.sendMessage(chatId, "❌ <b>រកមិនឃើញ Account នេះនៅលើ Server ទេ!</b> សូមបើក MT5 ឱ្យ EA រันជាមុនសិន។", { parse_mode: 'HTML' });
@@ -131,11 +132,19 @@ bot.on('message', (msg) => {
         if (!acc) return bot.sendMessage(chatId, "🤖 <b>សូមស្វាគមន៍!</b>\n\n👉 សូម Login៖ <code>/login [លេខ MT5] [Password]</code>", { parse_mode: 'HTML' });
 
         let menuMsg = `🎛️ <b>VTRADER CONTROL PANEL (${acc})</b>\n`;
+        menuMsg += `———————————————\n`;
+        menuMsg += `• <code>/start_ea</code> | <code>/pause_ea</code>\n`;
         menuMsg += `• <code>/target [តម្លៃ]</code> (ឧ: /target 4)\n`;
         menuMsg += `• <code>/lot [ទំហំ]</code> (ឧ: /lot 0.02)\n`;
         menuMsg += `• <code>/step [តម្លៃ]</code> (ឧ: /step 0.4)\n`;
         menuMsg += `• <code>/block [ចំនួន]</code> (ឧ: /block 15)\n`;
-        menuMsg += `• <code>/closeall</code> (បិទ Order ទាំងអស់)`;
+        menuMsg += `• <code>/inc [ទំហំ]</code> (ឧ: /inc 0.01)\n`;
+        menuMsg += `• <code>/news on|off</code> | <code>/news_before 30</code> | <code>/news_after 30</code>\n`;
+        menuMsg += `• <code>/friday on|off</code> | <code>/friday_time 19:00</code>\n`;
+        menuMsg += `• <code>/timefilter on|off</code> | <code>/pausetime 19:00 21:30</code>\n`;
+        menuMsg += `• <code>/dailytarget [ទឹកប្រាក់]</code> (ឧ: /dailytarget 50)\n`;
+        menuMsg += `• <code>/closeall</code> (បិទ Order ទាំងអស់)\n`;
+        menuMsg += `• <code>/logout</code> (ចាកចេញ)`;
         return bot.sendMessage(chatId, menuMsg, { parse_mode: 'HTML', ...keyboardMarkup });
     }
 
@@ -147,16 +156,19 @@ bot.on('message', (msg) => {
     if (lower.includes('status') || lower.includes('setting')) {
         const st = data.status || {};
         let report = `📊 <b>VTrader Status (${currentAcc})</b>\n💰 <b>Balance:</b> $${st.balance || 0} | <b>Float:</b> $${st.floating || 0}\n`;
+        report += `📦 <b>Positions:</b> ${(st.buys||0) + (st.sells||0)} (Buy: ${st.buys||0} | Sell: ${st.sells||0})\n\n`;
         report += getSummaryText(currentAcc, data);
         return bot.sendMessage(chatId, report, { parse_mode: 'HTML', ...keyboardMarkup });
     }
 
     if (lower.includes('start ea') || lower === '/start_ea') {
         data.active = true;
+        notifyAdmin(`បានបើកដំណើរការ EA (Start EA 🟢)`, currentAcc, msg);
         return bot.sendMessage(chatId, `🟢 <b>EA Status: ACTIVE (${currentAcc})</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
     }
     if (lower.includes('pause ea') || lower === '/pause_ea') {
         data.active = false;
+        notifyAdmin(`បានផ្អាកដំណើរការ EA (Pause EA ⏸️)`, currentAcc, msg);
         return bot.sendMessage(chatId, `⏸️ <b>EA Status: PAUSED (${currentAcc})</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
     }
 
@@ -164,6 +176,7 @@ bot.on('message', (msg) => {
         const match = text.match(/target\s*(\d+(\.\d+)?)/i) || text.match(/\d+(\.\d+)?/);
         if (match) {
             data.target = parseFloat(match[1] || match[0]);
+            notifyAdmin(`បានកែប្រែ Target ➔ $${data.target}/Order`, currentAcc, msg);
             return bot.sendMessage(chatId, `✏️ <b>Basket Target: $${data.target}/Order</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
         }
     }
@@ -172,6 +185,7 @@ bot.on('message', (msg) => {
         const match = text.match(/lot\s*(\d+(\.\d+)?)/i) || text.match(/\d+(\.\d+)?/);
         if (match) {
             data.lot = parseFloat(match[1] || match[0]);
+            notifyAdmin(`បានកែប្រែ Initial Lot ➔ ${data.lot}`, currentAcc, msg);
             return bot.sendMessage(chatId, `✏️ <b>Initial Lot: ${data.lot}</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
         }
     }
@@ -180,6 +194,7 @@ bot.on('message', (msg) => {
         const match = text.match(/step\s*(\d+(\.\d+)?)/i) || text.match(/\d+(\.\d+)?/);
         if (match) {
             data.step = parseFloat(match[1] || match[0]);
+            notifyAdmin(`បានកែប្រែ Grid Step ➔ $${data.step}`, currentAcc, msg);
             return bot.sendMessage(chatId, `✏️ <b>Grid Step: $${data.step}</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
         }
     }
@@ -188,23 +203,44 @@ bot.on('message', (msg) => {
         const match = text.match(/block\s*(\d+)/i) || text.match(/\d+/);
         if (match) {
             data.block = parseInt(match[1] || match[0]);
+            notifyAdmin(`បានកែប្រែ Block Size ➔ ${data.block}`, currentAcc, msg);
             return bot.sendMessage(chatId, `✏️ <b>Block Size: ${data.block} Orders</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
+        }
+    }
+
+    if (lower.includes('inc')) {
+        const match = text.match(/inc\s*(\d+(\.\d+)?)/i) || text.match(/\d+(\.\d+)?/);
+        if (match) {
+            data.inc = parseFloat(match[1] || match[0]);
+            notifyAdmin(`បានកែប្រែ Lot Increment ➔ +${data.inc}`, currentAcc, msg);
+            return bot.sendMessage(chatId, `✏️ <b>Lot Increment: +${data.inc}</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
         }
     }
 
     if (lower.includes('close')) {
         data.closeAll = true;
+        notifyAdmin(`⚠️ បានបញ្ជាបិទ Close All Positions`, currentAcc, msg);
         return bot.sendMessage(chatId, `🛑 <b>បានបញ្ជាបិទ Positions ទាំងអស់!</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
     }
 
     if (lower === '/logout') {
+        notifyAdmin(`បាន Logout ចេញពីប្រព័ន្ធ`, currentAcc, msg);
         delete userSessions[chatId];
         return bot.sendMessage(chatId, "🔒 <b>អ្នកបាន Logout រួចរាល់!</b>", { reply_markup: { remove_keyboard: true } });
     }
 });
 
 function getSummaryText(acc, d) {
-    return `⚙️ <b>Settings (${acc}):</b>\n• Target: $${d.target}/Order\n• Initial Lot: ${d.lot}\n• Step: $${d.step}\n• Block: ${d.block}`;
+    return `⚙️ <b>Settings (${acc}):</b>\n` +
+           `• EA Status: ${d.active ? 'RUNNING 🟢' : 'PAUSED ⏸️'}\n` +
+           `• Target: $${d.target}/Order\n` +
+           `• Initial Lot: ${d.lot}\n` +
+           `• Grid Step: $${d.step}\n` +
+           `• Block: ${d.block} (Inc: +${d.inc})\n` +
+           `• News Shield: ${d.useNews ? 'ON 🟢' : 'OFF 🔴'}\n` +
+           `• Friday Lock: ${d.useFriday ? 'ON 🔒' : 'OFF 🔓'}\n` +
+           `• Time Filter: ${d.useTimeFilter ? 'ON ⏰' : 'OFF 🔓'}\n` +
+           `• Daily Target: ${d.dailyTarget > 0 ? '$'+d.dailyTarget : 'DISABLED ❌'}`;
 }
 
 const PORT = process.env.PORT || 3000;
