@@ -40,7 +40,7 @@ app.post('/api/sync', (req, res) => {
         accountsDB[account] = {
             password: password || "123456",
             active: true, 
-            target: initialTarget !== undefined ? initialTarget : 4.0, // Default $4/Order
+            target: initialTarget !== undefined ? initialTarget : 4.0, 
             lot: initialLot !== undefined ? initialLot : 0.02, 
             step: initialStep !== undefined ? initialStep : 0.4, 
             block: initialBlock !== undefined ? initialBlock : 15, 
@@ -105,7 +105,7 @@ bot.on('message', (msg) => {
         let adminReport = `👑 <b>ADMIN MASTER DASHBOARD</b>\n👥 <b>Total Accounts:</b> ${totalAccounts}\n`;
         for (const [acc, data] of Object.entries(accountsDB)) {
             const st = data.status || {};
-            adminReport += `🔹 <b>MT5:</b> <code>${acc}</code> | Status: ${data.active ? '🟢' : '⏸️'} | Target: $${data.target}\n`;
+            adminReport += `🔹 <b>MT5:</b> <code>${acc}</code> | Target: $${data.target}/Order\n`;
         }
         return bot.sendMessage(chatId, adminReport, { parse_mode: 'HTML' });
     }
@@ -138,11 +138,6 @@ bot.on('message', (msg) => {
         menuMsg += `• <code>/lot [ទំហំ]</code> (ឧ: /lot 0.02)\n`;
         menuMsg += `• <code>/step [តម្លៃ]</code> (ឧ: /step 0.4)\n`;
         menuMsg += `• <code>/block [ចំនួន]</code> (ឧ: /block 15)\n`;
-        menuMsg += `• <code>/inc [ទំហំ]</code> (ឧ: /inc 0.01)\n`;
-        menuMsg += `• <code>/news on|off</code> | <code>/news_before 30</code> | <code>/news_after 30</code>\n`;
-        menuMsg += `• <code>/friday on|off</code> | <code>/friday_time 19:00</code>\n`;
-        menuMsg += `• <code>/timefilter on|off</code> | <code>/pausetime 19:00 21:30</code>\n`;
-        menuMsg += `• <code>/dailytarget [ទឹកប្រាក់]</code> (ឧ: /dailytarget 50)\n`;
         menuMsg += `• <code>/closeall</code> (បិទ Order ទាំងអស់)\n`;
         menuMsg += `• <code>/logout</code> (ចាកចេញ)`;
         return bot.sendMessage(chatId, menuMsg, { parse_mode: 'HTML', ...keyboardMarkup });
@@ -155,8 +150,13 @@ bot.on('message', (msg) => {
 
     if (lower.includes('status') || lower.includes('setting')) {
         const st = data.status || {};
-        let report = `📊 <b>VTrader Status (${currentAcc})</b>\n💰 <b>Balance:</b> $${st.balance || 0} | <b>Float:</b> $${st.floating || 0}\n`;
-        report += `📦 <b>Positions:</b> ${(st.buys||0) + (st.sells||0)} (Buy: ${st.buys||0} | Sell: ${st.sells||0})\n\n`;
+        const totalOrders = (st.buys || 0) + (st.sells || 0);
+        const cycleTargetUSD = totalOrders * data.target; // 🎯 គណនាទឹកប្រាក់ត្រូវកាត់សរុប (ឧ: 116 * 4 = $464)
+
+        let report = `📊 <b>VTrader Status (${currentAcc})</b>\n`;
+        report += `💰 <b>Balance:</b> $${st.balance || 0} | <b>Float:</b> $${st.floating || 0}\n`;
+        report += `📦 <b>Positions:</b> ${totalOrders} (Buy: ${st.buys||0} | Sell: ${st.sells||0})\n`;
+        report += `🎯 <b>Cycle Target (ត្រូវកាត់):</b> <T><b>$${cycleTargetUSD.toFixed(2)}</b></T> ($${data.target}/Order)\n\n`;
         report += getSummaryText(currentAcc, data);
         return bot.sendMessage(chatId, report, { parse_mode: 'HTML', ...keyboardMarkup });
     }
@@ -208,15 +208,6 @@ bot.on('message', (msg) => {
         }
     }
 
-    if (lower.includes('inc')) {
-        const match = text.match(/inc\s*(\d+(\.\d+)?)/i) || text.match(/\d+(\.\d+)?/);
-        if (match) {
-            data.inc = parseFloat(match[1] || match[0]);
-            notifyAdmin(`បានកែប្រែ Lot Increment ➔ +${data.inc}`, currentAcc, msg);
-            return bot.sendMessage(chatId, `✏️ <b>Lot Increment: +${data.inc}</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
-        }
-    }
-
     if (lower.includes('close')) {
         data.closeAll = true;
         notifyAdmin(`⚠️ បានបញ្ជាបិទ Close All Positions`, currentAcc, msg);
@@ -232,15 +223,10 @@ bot.on('message', (msg) => {
 
 function getSummaryText(acc, d) {
     return `⚙️ <b>Settings (${acc}):</b>\n` +
-           `• EA Status: ${d.active ? 'RUNNING 🟢' : 'PAUSED ⏸️'}\n` +
            `• Target: $${d.target}/Order\n` +
            `• Initial Lot: ${d.lot}\n` +
            `• Grid Step: $${d.step}\n` +
-           `• Block: ${d.block} (Inc: +${d.inc})\n` +
-           `• News Shield: ${d.useNews ? 'ON 🟢' : 'OFF 🔴'}\n` +
-           `• Friday Lock: ${d.useFriday ? 'ON 🔒' : 'OFF 🔓'}\n` +
-           `• Time Filter: ${d.useTimeFilter ? 'ON ⏰' : 'OFF 🔓'}\n` +
-           `• Daily Target: ${d.dailyTarget > 0 ? '$'+d.dailyTarget : 'DISABLED ❌'}`;
+           `• Block: ${d.block} (Inc: +${d.inc})`;
 }
 
 const PORT = process.env.PORT || 3000;
