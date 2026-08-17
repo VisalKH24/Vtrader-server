@@ -156,7 +156,7 @@ bot.on('message', (msg) => {
         let report = `📊 <b>VTrader Status (${currentAcc})</b>\n`;
         report += `💰 <b>Balance:</b> $${st.balance || 0} | <b>Float:</b> $${st.floating || 0}\n`;
         report += `📦 <b>Positions:</b> ${totalOrders} (Buy: ${st.buys||0} | Sell: ${st.sells||0})\n`;
-        report += `🎯 <b>Cycle Target (ត្រូវកាត់):</b> <T><b>$${cycleTargetUSD.toFixed(2)}</b></T> ($${data.target}/Order)\n\n`;
+        report += `🎯 <b>Cycle Target (ត្រូវកាត់):</b> <b>$${cycleTargetUSD.toFixed(2)}</b> ($${data.target}/Order)\n\n`;
         report += getSummaryText(currentAcc, data);
         return bot.sendMessage(chatId, report, { parse_mode: 'HTML', ...keyboardMarkup });
     }
