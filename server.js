@@ -15,7 +15,7 @@ const userSessions = {};
 function notifyAdmin(actionText, acc, userMsg) {
     if (!ADMIN_CHAT_ID || ADMIN_CHAT_ID === "YOUR_PERSONAL_CHAT_ID") return;
     
-    const sender = userMsg.from ? `@${userMsg.from.username || userMsg.from.first_name}` : "Unknown";
+    const sender = userMsg.from? `@${userMsg.from.username || userMsg.from.first_name}`: "Unknown";
     const timeStr = new Date().toLocaleString('en-GB', { timeZone: 'Asia/Phnom_Penh' });
 
     let logMsg = `🔔 <b>[ADMIN AUDIT LOG]</b>\n`;
@@ -41,12 +41,12 @@ app.post('/api/sync', (req, res) => {
         accountsDB[account] = {
             password: password || "13245",
             active: true, 
-            target: initialTarget !== undefined ? initialTarget : 10.0,
-            lot: initialLot !== undefined ? initialLot : 0.01,
+            target: initialTarget !== undefined ? initialTarget: 10.0,
+            lot: initialLot !== undefined ? initialLot: 0.01,
             step: initialStep !== undefined ? initialStep : 0.4,
-            block: initialBlock !== undefined ? initialBlock : 12,
-            multiplier: initialMultiplier !== undefined ? initialMultiplier : 1.08,
-            useHedge: true,
+            block: initialBlock !== undefined ? initialBlock: 12,
+            multiplier: initialMultiplier !== undefined ? initialMultiplier: 1.08,
+            useHedge: false,
             useDynamicTarget: true,
             holdL1: 30000.0, targetL1: 100.0,
             holdL2: 50000.0, targetL2: 200.0,
@@ -104,14 +104,14 @@ const keyboardMarkup = {
 
 bot.on('message', (msg) => {
     const chatId = msg.chat.id.toString();
-    const text = msg.text ? msg.text.trim() : "";
+    const text = msg.text? msg.text.trim() : "";
     const lower = text.toLowerCase();
 
     // ADMIN DASHBOARD
     if (lower === '/admin' && chatId === ADMIN_CHAT_ID.toString()) {
         const totalAccounts = Object.keys(accountsDB).length;
         let adminReport = `👑 <b>ADMIN MASTER DASHBOARD</b>\n👥 <b>Total Accounts:</b> ${totalAccounts}\n`;
-        for (const [acc, data] of Object.entries(accountsDB)) {
+        for (const [acc, data] of Object. entries(accountsDB)) {
             const st = data.status || {};
             adminReport += `🔹 <b>MT5:</b> <code>${acc}</code> | Status: ${data.active ? '🟢' : '⏸️'} | Float: $${st.floating || 0}\n`;
         }
