@@ -9,6 +9,29 @@ const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID || "YOUR_PERSONAL_CHAT_ID";
 
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
+// 📋 កំណត់ Bot Commands Menu ដើម្បីឱ្យលោតចេញពេលចុចវាយសញ្ញា "/"
+bot.setMyCommands([
+    { command: '/status', description: '📊 ឆែកមើល Balance, Floating & Settings' },
+    { command: '/menu', description: '📖 បង្ហាញ Panel និងពាក្យបញ្ជាទាំងអស់' },
+    { command: '/start_ea', description: '🟢 បើកដំណើរការ EA' },
+    { command: '/pause_ea', description: '⏸️ ផ្អាកការបើក Order ថ្មី' },
+    { command: '/target', description: '🎯 កែសម្រួល Basket Target $/Order' },
+    { command: '/target_pct', description: '🎯 កែសម្រួល Basket Target % Balance' },
+    { command: '/sl_money', description: '🛑 កាត់ខាត Max Loss តាមទឹកប្រាក់ ($)' },
+    { command: '/sl_pct', description: '🛑 កាត់ខាត Max Drawdown តាមភាគរយ (%)' },
+    { command: '/sl', description: '🛑 បិទការកាត់ខាតស្វ័យប្រវត្តិ (/sl off)' },
+    { command: '/lot', description: '📐 កែសម្រួល Start Lot' },
+    { command: '/step', description: '📏 កែសម្រួល Grid Step' },
+    { command: '/mult', description: '✖️ កែសម្រួល Lot Multiplier' },
+    { command: '/mode', description: '🎛️ ប្តូរម៉ូតគុណ Lot (block ឬ order)' },
+    { command: '/block', description: '📦 កែសម្រួលចំនួន Block Size' },
+    { command: '/hedge', description: '🔒 បើក/បិទ Hedge Lock (on ឬ off)' },
+    { command: '/news', description: '📰 បើក/បិទ News Filter (on ឬ off)' },
+    { command: '/friday', description: '🔒 បើក/បិទ Friday Lock (on ឬ off)' },
+    { command: '/closeall', description: '🛑 បិទរាល់ Position ទាំងអស់ជាបន្ទាន់' },
+    { command: '/logout', description: '🔒 ចាកចេញពីគណនីបច្ចុប្បន្ន' }
+]).catch(() => {});
+
 const accountsDB = {}; 
 const userSessions = {}; 
 
@@ -33,7 +56,8 @@ app.post('/api/sync', (req, res) => {
     const { 
         account, password, balance, floating, buys, sells, marketState,
         initialTarget, initialLot, initialStep, initialBlock, initialMultiplier,
-        initialMultiplyMode, initialUseTargetPct, initialBasketTargetPct, initialUseHedge
+        initialMultiplyMode, initialUseTargetPct, initialBasketTargetPct, initialUseHedge,
+        initialMaxLossUSD, initialMaxDrawdownPct
     } = req.body;
 
     if (!account) return res.status(400).json({ error: "Missing account ID" });
@@ -47,10 +71,12 @@ app.post('/api/sync', (req, res) => {
             step: initialStep !== undefined ? initialStep : 0.4,
             block: initialBlock !== undefined ? initialBlock : 12,
             multiplier: initialMultiplier !== undefined ? initialMultiplier : 1.08,
-            multiplyMode: initialMultiplyMode !== undefined ? initialMultiplyMode : 0, // 0 = By Block, 1 = Every Order
+            multiplyMode: initialMultiplyMode !== undefined ? initialMultiplyMode : 0,
             useTargetPct: initialUseTargetPct !== undefined ? initialUseTargetPct : false,
             basketTargetPct: initialBasketTargetPct !== undefined ? initialBasketTargetPct : 1.0,
             useHedge: initialUseHedge !== undefined ? initialUseHedge : false,
+            maxLossUSD: initialMaxLossUSD !== undefined ? initialMaxLossUSD : 0.0,
+            maxDrawdownPct: initialMaxDrawdownPct !== undefined ? initialMaxDrawdownPct : 100.0,
             useDynamicTarget: true,
             holdL1: 30000.0, targetL1: 100.0,
             holdL2: 50000.0, targetL2: 200.0,
@@ -77,6 +103,8 @@ app.post('/api/sync', (req, res) => {
         useTargetPct: current.useTargetPct,
         basketTargetPct: current.basketTargetPct,
         useHedge: current.useHedge,
+        maxLossUSD: current.maxLossUSD,
+        maxDrawdownPct: current.maxDrawdownPct,
         useDynamicTarget: current.useDynamicTarget,
         useNews: current.useNews,
         newsBefore: current.newsBefore,
@@ -114,7 +142,7 @@ bot.on('message', (msg) => {
     const text = msg.text ? msg.text.trim() : "";
     const lower = text.toLowerCase();
 
-    // ADMIN DASHBOARD
+    // ADMIN
     if (lower === '/admin' && chatId === ADMIN_CHAT_ID.toString()) {
         const totalAccounts = Object.keys(accountsDB).length;
         let adminReport = `👑 <b>ADMIN MASTER DASHBOARD</b>\n👥 <b>Total Accounts:</b> ${totalAccounts}\n`;
@@ -137,7 +165,7 @@ bot.on('message', (msg) => {
             notifyAdmin(`បាន Login ចូលគ្រប់គ្រង Account ជោគជ័យ`, acc, msg);
             return bot.sendMessage(chatId, `🔓 <b>Login ជោគជ័យទៅកាន់ Account: ${acc}!</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
         } else if (!accountsDB[acc]) {
-            accountsDB[acc] = { password: pass, active: true, target: 10.0, lot: 0.01, step: 0.4, block: 12, multiplier: 1.08, multiplyMode: 0, useTargetPct: false, basketTargetPct: 1.0, useHedge: false, useNews: true, useFriday: true, fridayTime: "22:00", dailyTarget: 0.0, status: {} };
+            accountsDB[acc] = { password: pass, active: true, target: 10.0, lot: 0.01, step: 0.4, block: 12, multiplier: 1.08, multiplyMode: 0, useTargetPct: false, basketTargetPct: 1.0, useHedge: false, maxLossUSD: 0.0, maxDrawdownPct: 100.0, useNews: true, useFriday: true, fridayTime: "22:00", dailyTarget: 0.0, status: {} };
             userSessions[chatId] = acc;
             return bot.sendMessage(chatId, `🔓 <b>Login ជោគជ័យទៅកាន់ Account: ${acc}!</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
         } else {
@@ -155,23 +183,26 @@ bot.on('message', (msg) => {
         menuMsg += `🟢 <b>ទូទៅ:</b>\n`;
         menuMsg += `• <code>/start_ea</code> | <code>/pause_ea</code> | <code>/status</code>\n\n`;
 
-        menuMsg += `⚙️ <b>Lot & Multiplier Mode:</b>\n`;
+        menuMsg += `🛑 <b>Basic Risk Management (កាត់ខាត):</b>\n`;
+        menuMsg += `• <code>/sl_money [ទឹកប្រាក់]</code> — កាត់ខាត Max Loss តាមទឹកប្រាក់ (ឧ: <code>/sl_money 500</code>)\n`;
+        menuMsg += `• <code>/sl_pct [ភាគរយ]</code> — កាត់ខាត Max DD តាមភាគរយ (ឧ: <code>/sl_pct 20</code>)\n`;
+        menuMsg += `• <code>/sl off</code> — បិទមុខងារកាត់ខាតស្វ័យប្រវត្តិ\n\n`;
+
+        menuMsg += `⚙️ <b>Lot & Multiplier:</b>\n`;
         menuMsg += `• <code>/mode block</code> — គុណតាមជុំ Block (Block Sizing)\n`;
         menuMsg += `• <code>/mode order</code> — គុណគ្រប់ Order (Every Order)\n`;
-        menuMsg += `• <code>/block [ចំនួន]</code> — កែ Block Size (ឧ: <code>/block 12</code>)\n`;
-        menuMsg += `• <code>/mult [មេគុណ]</code> — កែ Lot Multiplier (ឧ: <code>/mult 1.08</code>)\n`;
-        menuMsg += `• <code>/lot [ទំហំ]</code> — កែ Start Lot (ឧ: <code>/lot 0.01</code>)\n`;
-        menuMsg += `• <code>/step [តម្លៃ]</code> — កែ Grid Step (ឧ: <code>/step 0.4</code>)\n\n`;
+        menuMsg += `• <code>/block [ចំនួន]</code> — Block Size (ឧ: <code>/block 12</code>)\n`;
+        menuMsg += `• <code>/mult [មេគុណ]</code> — Lot Multiplier (ឧ: <code>/mult 1.08</code>)\n`;
+        menuMsg += `• <code>/lot [ទំហំ]</code> — Start Lot (ឧ: <code>/lot 0.01</code>)\n`;
+        menuMsg += `• <code>/step [តម្លៃ]</code> — Grid Step (ឧ: <code>/step 0.4</code>)\n\n`;
 
-        menuMsg += `🎯 <b>Basket Target & Percent:</b>\n`;
+        menuMsg += `🎯 <b>Basket Target:</b>\n`;
         menuMsg += `• <code>/target [តម្លៃ]</code> — Target $/Order (ឧ: <code>/target 10</code>)\n`;
-        menuMsg += `• <code>/target_pct on [ភាគរយ]</code> — បើក Target % (ឧ: <code>/target_pct on 1.0</code>)\n`;
-        menuMsg += `• <code>/target_pct off</code> — បិទ Target % ប្រើ $/Order ធម្មតា\n\n`;
+        menuMsg += `• <code>/target_pct on [ភាគរយ]</code> — Target % (ឧ: <code>/target_pct on 1.0</code>)\n`;
+        menuMsg += `• <code>/target_pct off</code> — បិទ Target % ប្រើ $/Order\n\n`;
 
         menuMsg += `🛡️ <b>Shields:</b>\n`;
-        menuMsg += `• <code>/hedge on|off</code> — បើក/បិទ Hedge Lock\n`;
-        menuMsg += `• <code>/news on|off</code> — បើក/បិទ News Filter Shield\n`;
-        menuMsg += `• <code>/friday on|off</code> — បើក/បិទ Friday Lock\n`;
+        menuMsg += `• <code>/hedge on|off</code> | <code>/news on|off</code> | <code>/friday on|off</code>\n`;
         menuMsg += `• <code>/closeall</code> — បិទ Positions ទាំងអស់\n`;
         menuMsg += `• <code>/logout</code> — ចាកចេញ`;
 
@@ -208,7 +239,31 @@ bot.on('message', (msg) => {
         return bot.sendMessage(chatId, report, { parse_mode: 'HTML', ...keyboardMarkup });
     }
 
-    // MULTIPLY MODE SWITCH
+    // 🛑 BASIC RISK MANAGEMENT COMMANDS
+    if (lower.startsWith('/sl_money') || lower.startsWith('sl_money')) {
+        const match = text.match(/\d+(\.\d+)?/);
+        if (match) {
+            data.maxLossUSD = parseFloat(match[0]);
+            notifyAdmin(`បានកែប្រែ Max Loss ➔ $${data.maxLossUSD}`, currentAcc, msg);
+            return bot.sendMessage(chatId, `🛑 <b>Stop Loss (Max Loss): $${data.maxLossUSD}</b> (ខាតដល់កម្រិតនេះនឹងកាត់បិទទាំងអស់)`, { parse_mode: 'HTML', ...keyboardMarkup });
+        }
+    }
+    if (lower.startsWith('/sl_pct') || lower.startsWith('sl_pct')) {
+        const match = text.match(/\d+(\.\d+)?/);
+        if (match) {
+            data.maxDrawdownPct = parseFloat(match[0]);
+            notifyAdmin(`បានកែប្រែ Max Drawdown ➔ ${data.maxDrawdownPct}%`, currentAcc, msg);
+            return bot.sendMessage(chatId, `🛑 <b>Max Drawdown Cut: ${data.maxDrawdownPct}%</b> (ខាតដល់ % នេះនឹងកាត់បិទទាំងអស់)`, { parse_mode: 'HTML', ...keyboardMarkup });
+        }
+    }
+    if (lower === '/sl off' || lower === 'sl off') {
+        data.maxLossUSD = 0.0;
+        data.maxDrawdownPct = 100.0;
+        notifyAdmin(`បានបិទមុខងារកាត់ខាតស្វ័យប្រវត្តិ (Stop Loss DISABLED)`, currentAcc, msg);
+        return bot.sendMessage(chatId, `🛑 <b>Stop Loss / Max DD: DISABLED ❌ (មិនកាត់ខាតស្វ័យប្រវត្តិទេ)</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
+    }
+
+    // MULTIPLY MODE
     if (lower.includes('/mode') || lower.startsWith('mode')) {
         if (lower.includes('order') || lower.includes('every')) {
             data.multiplyMode = 1;
@@ -236,7 +291,7 @@ bot.on('message', (msg) => {
         }
     }
 
-    // GENERAL COMMANDS
+    // GENERAL
     if (lower.includes('start ea') || lower === '/start_ea') {
         data.active = true;
         notifyAdmin(`បានបើកដំណើរការ EA (Start EA 🟢)`, currentAcc, msg);
@@ -254,7 +309,7 @@ bot.on('message', (msg) => {
             data.target = parseFloat(match[1] || match[0]);
             data.useTargetPct = false;
             notifyAdmin(`បានកែប្រែ Target ➔ $${data.target}/Order`, currentAcc, msg);
-            return bot.sendMessage(chatId, `✏️ <b>Basket Target: $${data.target}/Order (Target % បិទ)</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
+            return bot.sendMessage(chatId, `✏️ <b>Basket Target: $${data.target}/Order</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
         }
     }
 
@@ -331,9 +386,13 @@ bot.on('message', (msg) => {
 function getSummaryText(acc, d) {
     const modeStr = (d.multiplyMode === 1) ? "Every Order" : `By Block (${d.block})`;
     const targetStr = d.useTargetPct ? `${d.basketTargetPct}% (Target % ON)` : `$${d.target}/Order`;
+    const slMoneyStr = (d.maxLossUSD > 0) ? `$${d.maxLossUSD}` : "OFF ❌";
+    const slPctStr = (d.maxDrawdownPct < 100.0) ? `${d.maxDrawdownPct}%` : "OFF ❌";
+
     return `⚙️ <b>Settings (${acc}):</b>\n` +
            `• EA Status: ${d.active ? 'RUNNING 🟢' : 'PAUSED ⏸️'}\n` +
            `• Target: ${targetStr}\n` +
+           `• 🛑 Max Loss SL: ${slMoneyStr} | Max DD: ${slPctStr}\n` +
            `• Multiplier Mode: ${modeStr} (x${d.multiplier || 1.08})\n` +
            `• Start Lot: ${d.lot} | Step: $${d.step}\n` +
            `• Hedge Lock: ${d.useHedge ? 'ON 🔒' : 'OFF 🔓'}\n` +
