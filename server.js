@@ -9,18 +9,18 @@ const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID || "YOUR_PERSONAL_CHAT_ID";
 
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
-// 📋 កំណត់ Bot Commands Menu ដើម្បីឱ្យលោតចេញពេលចុចវាយសញ្ញា "/"
+// 📋 បញ្ជី Bot Commands
 bot.setMyCommands([
     { command: '/status', description: '📊 ឆែកមើល Balance, Floating & Settings' },
     { command: '/menu', description: '📖 បង្ហាញ Panel និងពាក្យបញ្ជាទាំងអស់' },
     { command: '/start_ea', description: '🟢 បើកដំណើរការ EA' },
     { command: '/pause_ea', description: '⏸️ ផ្អាកការបើក Order ថ្មី' },
+    { command: '/lot', description: '📐 កែសម្រួល Start Lot' },
     { command: '/target', description: '🎯 កែសម្រួល Basket Target $/Order' },
     { command: '/target_pct', description: '🎯 កែសម្រួល Basket Target % Balance' },
     { command: '/sl_money', description: '🛑 កាត់ខាត Max Loss តាមទឹកប្រាក់ ($)' },
     { command: '/sl_pct', description: '🛑 កាត់ខាត Max Drawdown តាមភាគរយ (%)' },
     { command: '/sl', description: '🛑 បិទការកាត់ខាតស្វ័យប្រវត្តិ (/sl off)' },
-    { command: '/lot', description: '📐 កែសម្រួល Start Lot' },
     { command: '/step', description: '📏 កែសម្រួល Grid Step' },
     { command: '/mult', description: '✖️ កែសម្រួល Lot Multiplier' },
     { command: '/mode', description: '🎛️ ប្តូរម៉ូតគុណ Lot (block ឬ order)' },
@@ -184,22 +184,21 @@ bot.on('message', (msg) => {
         menuMsg += `• <code>/start_ea</code> | <code>/pause_ea</code> | <code>/status</code>\n\n`;
 
         menuMsg += `🛑 <b>Basic Risk Management (កាត់ខាត):</b>\n`;
-        menuMsg += `• <code>/sl_money [ទឹកប្រាក់]</code> — កាត់ខាត Max Loss តាមទឹកប្រាក់ (ឧ: <code>/sl_money 500</code>)\n`;
-        menuMsg += `• <code>/sl_pct [ភាគរយ]</code> — កាត់ខាត Max DD តាមភាគរយ (ឧ: <code>/sl_pct 20</code>)\n`;
-        menuMsg += `• <code>/sl off</code> — បិទមុខងារកាត់ខាតស្វ័យប្រវត្តិ\n\n`;
+        menuMsg += `• <code>/sl_money 500</code> — កាត់ខាត Max Loss តាម $\n`;
+        menuMsg += `• <code>/sl_pct 20</code> — កាត់ខាត Max DD តាម %\n`;
+        menuMsg += `• <code>/sl off</code> — បិទការកាត់ខាត\n\n`;
 
         menuMsg += `⚙️ <b>Lot & Multiplier:</b>\n`;
-        menuMsg += `• <code>/mode block</code> — គុណតាមជុំ Block (Block Sizing)\n`;
-        menuMsg += `• <code>/mode order</code> — គុណគ្រប់ Order (Every Order)\n`;
-        menuMsg += `• <code>/block [ចំនួន]</code> — Block Size (ឧ: <code>/block 12</code>)\n`;
-        menuMsg += `• <code>/mult [មេគុណ]</code> — Lot Multiplier (ឧ: <code>/mult 1.08</code>)\n`;
-        menuMsg += `• <code>/lot [ទំហំ]</code> — Start Lot (ឧ: <code>/lot 0.01</code>)\n`;
-        menuMsg += `• <code>/step [តម្លៃ]</code> — Grid Step (ឧ: <code>/step 0.4</code>)\n\n`;
+        menuMsg += `• <code>/lot 0.02</code> — កែ Start Lot\n`;
+        menuMsg += `• <code>/step 0.4</code> — កែ Grid Step\n`;
+        menuMsg += `• <code>/block 12</code> — Block Size\n`;
+        menuMsg += `• <code>/mult 1.08</code> — Lot Multiplier\n`;
+        menuMsg += `• <code>/mode block</code> ឬ <code>/mode order</code> — ប្តូរម៉ូតគុណ Lot\n\n`;
 
         menuMsg += `🎯 <b>Basket Target:</b>\n`;
-        menuMsg += `• <code>/target [តម្លៃ]</code> — Target $/Order (ឧ: <code>/target 10</code>)\n`;
-        menuMsg += `• <code>/target_pct on [ភាគរយ]</code> — Target % (ឧ: <code>/target_pct on 1.0</code>)\n`;
-        menuMsg += `• <code>/target_pct off</code> — បិទ Target % ប្រើ $/Order\n\n`;
+        menuMsg += `• <code>/target 10</code> — Target $/Order\n`;
+        menuMsg += `• <code>/target_pct on 1.0</code> — Target %\n`;
+        menuMsg += `• <code>/target_pct off</code> — បិទ Target %\n\n`;
 
         menuMsg += `🛡️ <b>Shields:</b>\n`;
         menuMsg += `• <code>/hedge on|off</code> | <code>/news on|off</code> | <code>/friday on|off</code>\n`;
@@ -215,7 +214,7 @@ bot.on('message', (msg) => {
     const data = accountsDB[currentAcc];
 
     // STATUS
-    if (lower.includes('status') || lower.includes('setting')) {
+    if (lower === '📊 status' || lower === '/status' || lower === 'status' || lower === '⚙️ settings') {
         const st = data.status || {};
         const totalOrders = (st.buys || 0) + (st.sells || 0);
         let targetDisplay = "";
@@ -239,13 +238,76 @@ bot.on('message', (msg) => {
         return bot.sendMessage(chatId, report, { parse_mode: 'HTML', ...keyboardMarkup });
     }
 
-    // 🛑 BASIC RISK MANAGEMENT COMMANDS
+    // 📐 LOT COMMAND (ឆ្លាតវៃ៖ បើចុចតែ /lot ទទេ វានឹងប្រាប់ពីរបៀបវាយ)
+    if (lower.startsWith('/lot') || lower.startsWith('lot') || lower.includes('lot 0.')) {
+        const match = text.match(/lot\s*(\d+(\.\d+)?)/i) || (text !== '/lot' ? text.match(/\d+(\.\d+)?/) : null);
+        if (match) {
+            data.lot = parseFloat(match[1] || match[0]);
+            notifyAdmin(`បានកែប្រែ Start Lot ➔ ${data.lot}`, currentAcc, msg);
+            return bot.sendMessage(chatId, `✏️ <b>Start Lot បានកំណត់ទៅ៖ ${data.lot}</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
+        } else {
+            return bot.sendMessage(chatId, `📐 <b>របៀបកំណត់ Start Lot:</b>\nសូមវាយ <code>/lot [ទំហំ]</code> (ឧទាហរណ៍៖ <code>/lot 0.02</code>)`, { parse_mode: 'HTML' });
+        }
+    }
+
+    // 🎯 TARGET COMMAND
+    if ((lower.startsWith('/target') || lower.startsWith('target')) && !lower.includes('pct')) {
+        const match = text.match(/target\s*(\d+(\.\d+)?)/i) || (text !== '/target' ? text.match(/\d+(\.\d+)?/) : null);
+        if (match) {
+            data.target = parseFloat(match[1] || match[0]);
+            data.useTargetPct = false;
+            notifyAdmin(`បានកែប្រែ Target ➔ $${data.target}/Order`, currentAcc, msg);
+            return bot.sendMessage(chatId, `✏️ <b>Basket Target បានកំណត់ទៅ៖ $${data.target}/Order</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
+        } else {
+            return bot.sendMessage(chatId, `🎯 <b>របៀបកំណត់ Basket Target:</b>\nសូមវាយ <code>/target [តម្លៃ]</code> (ឧទាហរណ៍៖ <code>/target 25</code>)`, { parse_mode: 'HTML' });
+        }
+    }
+
+    // 📏 STEP COMMAND
+    if (lower.startsWith('/step') || lower.startsWith('step')) {
+        const match = text.match(/step\s*(\d+(\.\d+)?)/i) || (text !== '/step' ? text.match(/\d+(\.\d+)?/) : null);
+        if (match) {
+            data.step = parseFloat(match[1] || match[0]);
+            notifyAdmin(`បានកែប្រែ Grid Step ➔ $${data.step}`, currentAcc, msg);
+            return bot.sendMessage(chatId, `✏️ <b>Grid Step បានកំណត់ទៅ៖ $${data.step}</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
+        } else {
+            return bot.sendMessage(chatId, `📏 <b>របៀបកំណត់ Grid Step:</b>\nសូមវាយ <code>/step [តម្លៃ]</code> (ឧទាហរណ៍៖ <code>/step 0.4</code>)`, { parse_mode: 'HTML' });
+        }
+    }
+
+    // 📦 BLOCK COMMAND
+    if ((lower.startsWith('/block') || lower.startsWith('block')) && !lower.includes('mode')) {
+        const match = text.match(/block\s*(\d+)/i) || (text !== '/block' ? text.match(/\d+/) : null);
+        if (match) {
+            data.block = parseInt(match[1] || match[0]);
+            notifyAdmin(`បានកែប្រែ Block Size ➔ ${data.block}`, currentAcc, msg);
+            return bot.sendMessage(chatId, `✏️ <b>Block Size បានកំណត់ទៅ៖ ${data.block} Orders</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
+        } else {
+            return bot.sendMessage(chatId, `📦 <b>របៀបកំណត់ Block Size:</b>\nសូមវាយ <code>/block [ចំនួន]</code> (ឧទាហរណ៍៖ <code>/block 12</code>)`, { parse_mode: 'HTML' });
+        }
+    }
+
+    // ✖️ MULTIPLIER COMMAND
+    if ((lower.startsWith('/mult') || lower.startsWith('mult')) && !lower.includes('mode')) {
+        const match = text.match(/mult\s*(\d+(\.\d+)?)/i) || (text !== '/mult' ? text.match(/\d+(\.\d+)?/) : null);
+        if (match) {
+            data.multiplier = parseFloat(match[1] || match[0]);
+            notifyAdmin(`បានកែប្រែ Multiplier ➔ x${data.multiplier}`, currentAcc, msg);
+            return bot.sendMessage(chatId, `✏️ <b>Lot Multiplier បានកំណត់ទៅ៖ x${data.multiplier}</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
+        } else {
+            return bot.sendMessage(chatId, `✖️ <b>របៀបកំណត់ Multiplier:</b>\nសូមវាយ <code>/mult [មេគុណ]</code> (ឧទាហរណ៍៖ <code>/mult 1.08</code>)`, { parse_mode: 'HTML' });
+        }
+    }
+
+    // 🛑 SL MONEY & PCT COMMANDS
     if (lower.startsWith('/sl_money') || lower.startsWith('sl_money')) {
         const match = text.match(/\d+(\.\d+)?/);
         if (match) {
             data.maxLossUSD = parseFloat(match[0]);
             notifyAdmin(`បានកែប្រែ Max Loss ➔ $${data.maxLossUSD}`, currentAcc, msg);
-            return bot.sendMessage(chatId, `🛑 <b>Stop Loss (Max Loss): $${data.maxLossUSD}</b> (ខាតដល់កម្រិតនេះនឹងកាត់បិទទាំងអស់)`, { parse_mode: 'HTML', ...keyboardMarkup });
+            return bot.sendMessage(chatId, `🛑 <b>Stop Loss (Max Loss): $${data.maxLossUSD}</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
+        } else {
+            return bot.sendMessage(chatId, `🛑 <b>របៀបកំណត់ Max Loss SL:</b>\nសូមវាយ <code>/sl_money [ទឹកប្រាក់]</code> (ឧទាហរណ៍៖ <code>/sl_money 500</code>)`, { parse_mode: 'HTML' });
         }
     }
     if (lower.startsWith('/sl_pct') || lower.startsWith('sl_pct')) {
@@ -253,14 +315,16 @@ bot.on('message', (msg) => {
         if (match) {
             data.maxDrawdownPct = parseFloat(match[0]);
             notifyAdmin(`បានកែប្រែ Max Drawdown ➔ ${data.maxDrawdownPct}%`, currentAcc, msg);
-            return bot.sendMessage(chatId, `🛑 <b>Max Drawdown Cut: ${data.maxDrawdownPct}%</b> (ខាតដល់ % នេះនឹងកាត់បិទទាំងអស់)`, { parse_mode: 'HTML', ...keyboardMarkup });
+            return bot.sendMessage(chatId, `🛑 <b>Max Drawdown SL: ${data.maxDrawdownPct}%</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
+        } else {
+            return bot.sendMessage(chatId, `🛑 <b>របៀបកំណត់ Max Drawdown SL:</b>\nសូមវាយ <code>/sl_pct [ភាគរយ]</code> (ឧទាហរណ៍៖ <code>/sl_pct 20</code>)`, { parse_mode: 'HTML' });
         }
     }
-    if (lower === '/sl off' || lower === 'sl off') {
+    if (lower === '/sl off' || lower === 'sl off' || lower === '/sl') {
         data.maxLossUSD = 0.0;
         data.maxDrawdownPct = 100.0;
         notifyAdmin(`បានបិទមុខងារកាត់ខាតស្វ័យប្រវត្តិ (Stop Loss DISABLED)`, currentAcc, msg);
-        return bot.sendMessage(chatId, `🛑 <b>Stop Loss / Max DD: DISABLED ❌ (មិនកាត់ខាតស្វ័យប្រវត្តិទេ)</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
+        return bot.sendMessage(chatId, `🛑 <b>Stop Loss / Max DD: DISABLED ❌</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
     }
 
     // MULTIPLY MODE
@@ -273,6 +337,8 @@ bot.on('message', (msg) => {
             data.multiplyMode = 0;
             notifyAdmin(`បានប្តូរ Multiply Mode ➔ By Block (${data.block})`, currentAcc, msg);
             return bot.sendMessage(chatId, `✏️ <b>Multiplier Mode: By Block (គុណតាមជុំ ${data.block} Orders)</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
+        } else {
+            return bot.sendMessage(chatId, `🎛️ <b>របៀបប្តូរ Multiply Mode:</b>\n• <code>/mode block</code> (គុណតាម Block)\n• <code>/mode order</code> (គុណគ្រប់ Order)`, { parse_mode: 'HTML' });
         }
     }
 
@@ -284,14 +350,18 @@ bot.on('message', (msg) => {
             return bot.sendMessage(chatId, `✏️ <b>Target Percent: DISABLED ❌ (ប្រើ $${data.target}/Order)</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
         } else {
             const match = text.match(/\d+(\.\d+)?/);
-            if (match) data.basketTargetPct = parseFloat(match[0]);
-            data.useTargetPct = true;
-            notifyAdmin(`បានបើក Target Percent ➔ ${data.basketTargetPct}%`, currentAcc, msg);
-            return bot.sendMessage(chatId, `✏️ <b>Target Percent: ENABLED 🟢 (${data.basketTargetPct}% នៃ Balance)</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
+            if (match) {
+                data.basketTargetPct = parseFloat(match[0]);
+                data.useTargetPct = true;
+                notifyAdmin(`បានបើក Target Percent ➔ ${data.basketTargetPct}%`, currentAcc, msg);
+                return bot.sendMessage(chatId, `✏️ <b>Target Percent: ENABLED 🟢 (${data.basketTargetPct}% នៃ Balance)</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
+            } else {
+                return bot.sendMessage(chatId, `🎯 <b>របៀបប្រើ Target Percent:</b>\n• <code>/target_pct on 1.0</code> (បើកប្រើ 1.0%)\n• <code>/target_pct off</code> (បិទ)`, { parse_mode: 'HTML' });
+            }
         }
     }
 
-    // GENERAL
+    // GENERAL COMMANDS
     if (lower.includes('start ea') || lower === '/start_ea') {
         data.active = true;
         notifyAdmin(`បានបើកដំណើរការ EA (Start EA 🟢)`, currentAcc, msg);
@@ -301,52 +371,6 @@ bot.on('message', (msg) => {
         data.active = false;
         notifyAdmin(`បានផ្អាកដំណើរការ EA (Pause EA ⏸️)`, currentAcc, msg);
         return bot.sendMessage(chatId, `⏸️ <b>EA Status: PAUSED (${currentAcc})</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
-    }
-
-    if (lower.includes('target') && !lower.includes('pct')) {
-        const match = text.match(/target\s*(\d+(\.\d+)?)/i) || text.match(/\d+(\.\d+)?/);
-        if (match) {
-            data.target = parseFloat(match[1] || match[0]);
-            data.useTargetPct = false;
-            notifyAdmin(`បានកែប្រែ Target ➔ $${data.target}/Order`, currentAcc, msg);
-            return bot.sendMessage(chatId, `✏️ <b>Basket Target: $${data.target}/Order</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
-        }
-    }
-
-    if (lower.includes('lot')) {
-        const match = text.match(/lot\s*(\d+(\.\d+)?)/i) || text.match(/\d+(\.\d+)?/);
-        if (match) {
-            data.lot = parseFloat(match[1] || match[0]);
-            notifyAdmin(`បានកែប្រែ Start Lot ➔ ${data.lot}`, currentAcc, msg);
-            return bot.sendMessage(chatId, `✏️ <b>Start Lot: ${data.lot}</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
-        }
-    }
-
-    if (lower.includes('step')) {
-        const match = text.match(/step\s*(\d+(\.\d+)?)/i) || text.match(/\d+(\.\d+)?/);
-        if (match) {
-            data.step = parseFloat(match[1] || match[0]);
-            notifyAdmin(`បានកែប្រែ Grid Step ➔ $${data.step}`, currentAcc, msg);
-            return bot.sendMessage(chatId, `✏️ <b>Grid Step: $${data.step}</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
-        }
-    }
-
-    if (lower.includes('block') && !lower.includes('mode')) {
-        const match = text.match(/block\s*(\d+)/i) || text.match(/\d+/);
-        if (match) {
-            data.block = parseInt(match[1] || match[0]);
-            notifyAdmin(`បានកែប្រែ Block Size ➔ ${data.block}`, currentAcc, msg);
-            return bot.sendMessage(chatId, `✏️ <b>Block Size: ${data.block} Orders</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
-        }
-    }
-
-    if (lower.includes('mult') && !lower.includes('mode')) {
-        const match = text.match(/mult\s*(\d+(\.\d+)?)/i) || text.match(/\d+(\.\d+)?/);
-        if (match) {
-            data.multiplier = parseFloat(match[1] || match[0]);
-            notifyAdmin(`បានកែប្រែ Multiplier ➔ x${data.multiplier}`, currentAcc, msg);
-            return bot.sendMessage(chatId, `✏️ <b>Lot Multiplier: x${data.multiplier}</b>`, { parse_mode: 'HTML', ...keyboardMarkup });
-        }
     }
 
     if (lower.includes('hedge')) {
